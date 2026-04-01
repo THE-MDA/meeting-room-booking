@@ -1,0 +1,49 @@
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: meeting_rooms_db
+    environment:
+      POSTGRES_USER: ${DB_USER:-app}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      POSTGRES_DB: ${DB_NAME:-meeting_rooms}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-app} -d ${DB_NAME:-meeting_rooms}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - meeting_rooms_network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meeting_rooms_app
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-app}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      DB_NAME: ${DB_NAME:-meeting_rooms}
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-change-in-production}
+      SERVER_PORT: 8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - meeting_rooms_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  meeting_rooms_network:
+    driver: bridge

@@ -1,0 +1,6 @@
+-- +migrate Down
+DROP TABLE IF EXISTS bookings;
+DROP TABLE IF EXISTS schedules;
+DROP TABLE IF EXISTS rooms;
+DROP TABLE IF EXISTS users;
+DROP EXTENSION IF EXISTS "uuid-ossp";
