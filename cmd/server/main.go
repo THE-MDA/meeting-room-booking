@@ -17,6 +17,7 @@ import (
 	"meeting-room-booking/internal/logger"
 	"meeting-room-booking/internal/migrator"
 	"meeting-room-booking/internal/repository"
+	"meeting-room-booking/internal/service"
 )
 
 func main() {
@@ -72,13 +73,20 @@ func main() {
 	scheduleRepo := repository.NewScheduleRepository(dbWrapper)
 	bookingRepo := repository.NewBookingRepository(dbWrapper)
 
-	// TODO: remove after implementing services
-	_ = userRepo
-	_ = roomRepo
-	_ = scheduleRepo
-	_ = bookingRepo
-
 	slog.Info("Repositories initialized")
+
+	authService := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiration)
+	roomService := service.NewRoomService(roomRepo)
+	scheduleService := service.NewScheduleService(scheduleRepo, roomRepo)
+	bookingService := service.NewBookingService(bookingRepo, roomRepo, scheduleRepo)
+
+	// TODO: remove 
+	_ = authService
+	_ = roomService
+	_ = scheduleService
+	_ = bookingService
+
+	slog.Info("Services initialized")
 
 	mux := http.NewServeMux()
 
