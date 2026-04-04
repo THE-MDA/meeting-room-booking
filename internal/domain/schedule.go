@@ -52,12 +52,8 @@ func NewSchedule(roomID uuid.UUID, dayOfWeek DayOfWeek, startTime, endTime strin
 	}
 
 	duration := end.Sub(start)
-	if duration%30 != 0 {
+	if duration%(30*time.Minute) != 0 {
 		return nil, errors.New("time range must be a multiple of 30 minutes")
-	}
-
-	if duration < 30*time.Minute {
-		return nil, errors.New("time range must be at least 30 minutes")
 	}
 
 	return &Schedule{
@@ -71,8 +67,9 @@ func NewSchedule(roomID uuid.UUID, dayOfWeek DayOfWeek, startTime, endTime strin
 }
 
 func (s *Schedule) GenerateSlotsForDate(date time.Time) []TimeSlot {
-	expectedWeekday := (int(s.DayOfWeek) + 1) % 7
-	if int(date.Weekday()) != expectedWeekday {
+	targetWeekday := time.Weekday((int(s.DayOfWeek) + 1) % 7)
+
+	if date.Weekday() != targetWeekday {
 		return nil
 	}
 

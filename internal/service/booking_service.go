@@ -4,99 +4,60 @@ import (
 	"context"
 	"errors"
 	"meeting-room-booking/internal/domain"
-	"meeting-room-booking/internal/repository"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 type BookingService struct {
-	bookingRepo  *repository.BookingRepository
-	roomRepo     *repository.RoomRepository
-	scheduleRepo *repository.ScheduleRepository
+	bookingRepo  domain.BookingRepository
+	slotRepo     domain.SlotRepository
+	roomRepo     domain.RoomRepository
+	scheduleRepo domain.ScheduleRepository
 }
 
-func NewBookingService(bookingRepo *repository.BookingRepository, roomRepo *repository.RoomRepository,
-	scheduleRepo *repository.ScheduleRepository) *BookingService {
+func NewBookingService(bookingRepo domain.BookingRepository, slotRepo domain.SlotRepository, roomRepo domain.RoomRepository, scheduleRepo domain.ScheduleRepository) *BookingService{
 	return &BookingService{
 		bookingRepo:  bookingRepo,
+		slotRepo:     slotRepo,
 		roomRepo:     roomRepo,
 		scheduleRepo: scheduleRepo,
 	}
 }
 
-func (s *BookingService) GetAvailableSlots(ctx context.Context, roomID uuid.UUID,
-	date time.Time) ([]*domain.Slot, error) {
-	room, err := s.roomRepo.GetByID(ctx, roomID)
-	if err != nil {
-		return nil, err
-	}
-
-	if room == nil {
-		return nil, errors.New("room not found")
-	}
-
-	schedules, err := s.scheduleRepo.GetByRoomID(ctx, roomID)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(schedules) == 0 {
-		return []*domain.Slot{}, nil
-	}
-
-	var allTimeSlots []domain.TimeSlot
-	for _, schedule := range schedules {
-		slots := schedule.GenerateSlotsForDate(date)
-		allTimeSlots = append(allTimeSlots, slots...)
-	}
-
-	if len(allTimeSlots) == 0 {
-		return []*domain.Slot{}, nil
-	}
-
-	slots := make([]*domain.Slot, len(allTimeSlots))
-	slotIDs := make([]string, len(allTimeSlots))
-	for i, ts := range allTimeSlots {
-		slot := ts.ToSlot(roomID)
-		slots[i] = slot
-		slotIDs[i] = slot.ID
-	}
-
-	bookedSlots, err := s.bookingRepo.GetBookedSlots(ctx, slotIDs)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, slot := range slots {
-		if bookedSlots[slot.ID] {
-			slot.IsBooked = true
-		}
-	}
-
-	return slots, nil
+func (s *BookingService) GetAvailableSlots(ctx context.Context, roomID uuid.UUID, date time.Time) ([]*domain.Slot, error) {
+	return s.slotRepo.GetAvailableSlots(ctx, roomID, date)
 }
 
-func (s *BookingService) CreateBooking(ctx context.Context, userID uuid.UUID, slotID string,
-	roomID uuid.UUID, startTime time.Time, endTime time.Time) (*domain.Booking, error) {
-	if startTime.Before(time.Now().UTC()) {
+func (s *BookingService) CreateBooking(ctx context.Context, userID uuid.UUID, slotID string) (*domain.Booking, error) {
+	slotUUID, err := uuid.Parse(slotID)
+	if err != nil {
+		return nil, errors.New("invalid slot id")
+	}
+	slot, err := s.slotRepo.GetByID(ctx, slotUUID)
+	if err != nil {
+		return nil, err
+	}
+	if slot == nil {
+		return nil, errors.New("slot not found")
+	}
+	if slot.StartTime.Before(time.Now().UTC()) {
 		return nil, errors.New("cannot book slots in the past")
 	}
-
 	isBooked, err := s.bookingRepo.IsSlotBooked(ctx, slotID)
 	if err != nil {
 		return nil, err
 	}
-
 	if isBooked {
 		return nil, errors.New("slot is already booked")
 	}
-
-	booking, err := domain.NewBooking(slotID, roomID, userID, startTime, endTime)
+	booking, err := domain.NewBooking(slotID, slot.RoomID, userID, slot.StartTime, slot.EndTime)
 	if err != nil {
 		return nil, err
 	}
-
+	if err := s.bookingRepo.Create(ctx, booking); err != nil {
+		return nil, err
+	}
 	return booking, nil
 }
 
@@ -105,7 +66,20 @@ func (s *BookingService) CancelBooking(ctx context.Context, bookingID uuid.UUID)
 }
 
 func (s *BookingService) GetUserBookings(ctx context.Context, userID uuid.UUID) ([]*domain.Booking, error) {
-	return s.bookingRepo.GetByUserID(ctx, userID, true)
+    bookings, err := s.bookingRepo.GetByUserID(ctx, userID, false)
+    if err != nil {
+        return nil, err
+    }
+    
+    var futureActiveBookings []*domain.Booking
+    now := time.Now().UTC()
+    for _, booking := range bookings {
+        if booking.Status == domain.BookingStatusActive && booking.StartTime.After(now) {
+            futureActiveBookings = append(futureActiveBookings, booking)
+        }
+    }
+    
+    return futureActiveBookings, nil
 }
 
 func (s *BookingService) GetAllBookings(ctx context.Context, limit, offset int) ([]*domain.Booking, error) {
@@ -131,4 +105,8 @@ func (s *BookingService) GetBookingByID(ctx context.Context, bookingID uuid.UUID
 	}
 
 	return booking, nil
+}
+
+func (s *BookingService) CountBookings(ctx context.Context) (int, error) {
+    return s.bookingRepo.Count(ctx)
 }

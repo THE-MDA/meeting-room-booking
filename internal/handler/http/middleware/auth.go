@@ -10,8 +10,8 @@ import (
 type contextKey string
 
 const (
-    UserIDKey contextKey = "user_id"
-    UserRoleKey contextKey = "user_role"
+	UserIDKey   contextKey = "user_id"
+	UserRoleKey contextKey = "user_role"
 )
 
 type AuthMiddleware struct {
@@ -19,7 +19,7 @@ type AuthMiddleware struct {
 }
 
 func NewAuthMiddleware(authService *service.AuthService) *AuthMiddleware {
-	return &AuthMiddleware {
+	return &AuthMiddleware{
 		authService: authService,
 	}
 }
@@ -29,23 +29,23 @@ func (m *AuthMiddleware) Authenticate(next http.HandlerFunc) http.HandlerFunc {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			http.Error(w, "missing authorization header", http.StatusUnauthorized)
-			return 
+			return
 		}
 
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			http.Error(w, "invalid authorization header format", http.StatusUnauthorized)
-			return 
+			return
 		}
 
 		token := parts[1]
 		claims, err := m.authService.ValidateToken(token)
 		if err != nil {
 			http.Error(w, "invalid or expired token", http.StatusUnauthorized)
-			return 
+			return
 		}
 
-		ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
+		ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID.String())
 		ctx = context.WithValue(ctx, UserRoleKey, claims.Role)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -55,9 +55,9 @@ func (m *AuthMiddleware) Authenticate(next http.HandlerFunc) http.HandlerFunc {
 func (m *AuthMiddleware) RequireAdmin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		role, ok := r.Context().Value(UserRoleKey).(string)
-		if !ok || role != "admin"{
+		if !ok || role != "admin" {
 			http.Error(w, "access denied: admin role required", http.StatusForbidden)
-			return 
+			return
 		}
 		next.ServeHTTP(w, r)
 	}
@@ -67,4 +67,3 @@ func GetUserID(ctx context.Context) (string, bool) {
 	userID, ok := ctx.Value(UserIDKey).(string)
 	return userID, ok
 }
-

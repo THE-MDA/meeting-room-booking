@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -35,4 +36,12 @@ type BookingRepository interface {
 	Cancel(ctx context.Context, id uuid.UUID) error
 	IsSlotBooked(ctx context.Context, slotID string) (bool, error)
 	GetBookedSlots(ctx context.Context, slotIDs []string) (map[string]bool, error)
+	Count(ctx context.Context) (int, error)
+}
+
+type SlotRepository interface {
+    Create(ctx context.Context, slot *Slot) error
+    GetByID(ctx context.Context, id uuid.UUID) (*Slot, error)
+    GetAvailableSlots(ctx context.Context, roomID uuid.UUID, date time.Time) ([]*Slot, error)
+    GenerateAndSaveSlotsForRoom(ctx context.Context, roomID uuid.UUID, schedules []*Schedule, daysForward int) error
 }

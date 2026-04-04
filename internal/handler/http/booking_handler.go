@@ -1,66 +1,63 @@
 package http
 
 import (
-    "encoding/json"
-    "net/http"
-    "time"
+	"encoding/json"
+	"net/http"
+	"time"
 
-    "github.com/google/uuid"
-    "meeting-room-booking/internal/handler/http/middleware"
-    "meeting-room-booking/internal/service"
+	"meeting-room-booking/internal/handler/http/middleware"
+	"meeting-room-booking/internal/service"
+
+	"github.com/google/uuid"
 )
 
 type BookingHandler struct {
-    bookingService *service.BookingService
+	bookingService *service.BookingService
 }
 
 func NewBookingHandler(bookingService *service.BookingService) *BookingHandler {
-    return &BookingHandler{
-        bookingService: bookingService,
-    }
+	return &BookingHandler{
+		bookingService: bookingService,
+	}
 }
 
 type getSlotsRequest struct {
-    RoomID string `json:"room_id"`
-    Date   string `json:"date"`
+	RoomID string `json:"room_id"`
+	Date   string `json:"date"`
 }
 
 type createBookingRequest struct {
-    SlotID    string `json:"slot_id"`
-    RoomID    string `json:"room_id"`
-    StartTime string `json:"start_time"`
-    EndTime   string `json:"end_time"`
+    SlotID              string `json:"slotId"`
 }
 
 func (h *BookingHandler) GetAvailableSlots(w http.ResponseWriter, r *http.Request) {
-    roomIDStr := r.URL.Query().Get("room_id")
-    dateStr := r.URL.Query().Get("date")
-
-    if roomIDStr == "" || dateStr == "" {
-        http.Error(w, "room_id and date are required", http.StatusBadRequest)
+    roomIDStr := r.PathValue("roomId")
+    if roomIDStr == "" {
+        http.Error(w, "room_id is required", http.StatusBadRequest)
         return
     }
-
     roomID, err := uuid.Parse(roomIDStr)
     if err != nil {
         http.Error(w, "invalid room_id", http.StatusBadRequest)
         return
     }
-
+    dateStr := r.URL.Query().Get("date")
+    if dateStr == "" {
+        http.Error(w, "date is required", http.StatusBadRequest)
+        return
+    }
     date, err := time.Parse("2006-01-02", dateStr)
     if err != nil {
         http.Error(w, "invalid date format, expected YYYY-MM-DD", http.StatusBadRequest)
         return
     }
-
     slots, err := h.bookingService.GetAvailableSlots(r.Context(), roomID, date)
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)
         return
     }
-
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(slots)
+    json.NewEncoder(w).Encode(map[string]interface{}{"slots": slots})
 }
 
 func (h *BookingHandler) CreateBooking(w http.ResponseWriter, r *http.Request) {
@@ -69,108 +66,96 @@ func (h *BookingHandler) CreateBooking(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "unauthorized", http.StatusUnauthorized)
         return
     }
-
     userID, err := uuid.Parse(userIDStr)
     if err != nil {
         http.Error(w, "invalid user id", http.StatusUnauthorized)
         return
     }
-
     var req createBookingRequest
     if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
         http.Error(w, "invalid request body", http.StatusBadRequest)
         return
     }
-
-    roomID, err := uuid.Parse(req.RoomID)
-    if err != nil {
-        http.Error(w, "invalid room_id", http.StatusBadRequest)
+    if req.SlotID == "" {
+        http.Error(w, "slotId is required", http.StatusBadRequest)
         return
     }
-
-    startTime, err := time.Parse(time.RFC3339, req.StartTime)
-    if err != nil {
-        http.Error(w, "invalid start_time format, expected RFC3339", http.StatusBadRequest)
-        return
-    }
-
-    endTime, err := time.Parse(time.RFC3339, req.EndTime)
-    if err != nil {
-        http.Error(w, "invalid end_time format, expected RFC3339", http.StatusBadRequest)
-        return
-    }
-
-    booking, err := h.bookingService.CreateBooking(r.Context(), userID, req.SlotID, roomID, startTime, endTime)
+    booking, err := h.bookingService.CreateBooking(r.Context(), userID, req.SlotID)
     if err != nil {
         http.Error(w, err.Error(), http.StatusBadRequest)
         return
     }
-
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusCreated)
-    json.NewEncoder(w).Encode(booking)
+    json.NewEncoder(w).Encode(map[string]interface{}{"booking": booking})
 }
 
 func (h *BookingHandler) CancelBooking(w http.ResponseWriter, r *http.Request) {
-    bookingIDStr := r.URL.Path[len("/bookings/"):]
-    
-    bookingID, err := uuid.Parse(bookingIDStr)
-    if err != nil {
-        http.Error(w, "invalid booking id", http.StatusBadRequest)
-        return
-    }
+	bookingIDStr := r.PathValue("bookingId")
+	if bookingIDStr == "" {
+		http.Error(w, "booking_id is required", http.StatusBadRequest)
+		return
+	}
 
-    userIDStr, ok := middleware.GetUserID(r.Context())
-    if !ok {
-        http.Error(w, "unauthorized", http.StatusUnauthorized)
-        return
-    }
+	bookingID, err := uuid.Parse(bookingIDStr)
+	if err != nil {
+		http.Error(w, "invalid booking id", http.StatusBadRequest)
+		return
+	}
 
-    userID, err := uuid.Parse(userIDStr)
-    if err != nil {
-        http.Error(w, "invalid user id", http.StatusUnauthorized)
-        return
-    }
+	userIDStr, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-    booking, err := h.bookingService.GetBookingByID(r.Context(), bookingID)
-    if err != nil {
-        http.Error(w, "booking not found", http.StatusNotFound)
-        return
-    }
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusUnauthorized)
+		return
+	}
 
-    if booking.UserID != userID {
-        http.Error(w, "access denied: booking belongs to another user", http.StatusForbidden)
-        return
-    }
+	booking, err := h.bookingService.GetBookingByID(r.Context(), bookingID)
+	if err != nil {
+		http.Error(w, "booking not found", http.StatusNotFound)
+		return
+	}
 
-    if err := h.bookingService.CancelBooking(r.Context(), bookingID); err != nil {
-        http.Error(w, "failed to cancel booking", http.StatusInternalServerError)
-        return
-    }
+	if booking.UserID != userID {
+		http.Error(w, "cannot cancel another user's booking", http.StatusForbidden)
+		return
+	}
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]string{"status": "cancelled"})
+	if err := h.bookingService.CancelBooking(r.Context(), bookingID); err != nil {
+		http.Error(w, "failed to cancel booking", http.StatusInternalServerError)
+		return
+	}
+
+	updatedBooking, _ := h.bookingService.GetBookingByID(r.Context(), bookingID)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{"booking": updatedBooking})
 }
 
 func (h *BookingHandler) GetMyBookings(w http.ResponseWriter, r *http.Request) {
-    userIDStr, ok := middleware.GetUserID(r.Context())
-    if !ok {
-        http.Error(w, "unauthorized", http.StatusUnauthorized)
-        return
-    }
+	userIDStr, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-    userID, err := uuid.Parse(userIDStr)
-    if err != nil {
-        http.Error(w, "invalid user id", http.StatusUnauthorized)
-        return
-    }
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusUnauthorized)
+		return
+	}
 
-    bookings, err := h.bookingService.GetUserBookings(r.Context(), userID)
-    if err != nil {
-        http.Error(w, "failed to get bookings", http.StatusInternalServerError)
-        return
-    }
+	bookings, err := h.bookingService.GetUserBookings(r.Context(), userID)
+	if err != nil {
+		http.Error(w, "failed to get bookings", http.StatusInternalServerError)
+		return
+	}
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(bookings)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(bookings)
 }

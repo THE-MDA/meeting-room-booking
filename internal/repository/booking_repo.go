@@ -22,9 +22,10 @@ func NewBookingRepository(db *DB) *BookingRepository {
 
 func (r *BookingRepository) Create(ctx context.Context, booking *domain.Booking) error {
 	query := `INSERT INTO bookings (id, slot_id, room_id, user_id, start_time, end_time, status, created_at)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
-	_, err := r.db.ExecContext(ctx, query, booking.ID, booking.SlotID, booking.RoomID, booking.UserID,
+	_, err := r.db.ExecContext(ctx, query,
+		booking.ID, booking.SlotID, booking.RoomID, booking.UserID,
 		booking.StartTime, booking.EndTime, booking.Status, booking.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create booking: %w", err)
@@ -35,7 +36,7 @@ func (r *BookingRepository) Create(ctx context.Context, booking *domain.Booking)
 
 func (r *BookingRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Booking, error) {
 	query := `SELECT id, slot_id, room_id, user_id, start_time, end_time, status, created_at, cancelled_at
-	FROM bookings WHERE id = $1`
+    FROM bookings WHERE id = $1`
 
 	var booking domain.Booking
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -54,7 +55,7 @@ func (r *BookingRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-
+		fmt.Printf("DEBUG GetByID: scan error=%v\n", err)
 		return nil, fmt.Errorf("failed to get booking by ID: %w", err)
 	}
 
@@ -207,4 +208,10 @@ func (r *BookingRepository) GetBookedSlots(ctx context.Context, slotIDs []string
 	}
 
 	return booked, rows.Err()
+}
+
+func (r *BookingRepository) Count(ctx context.Context) (int, error) {
+    var count int
+    err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM bookings").Scan(&count)
+    return count, err
 }

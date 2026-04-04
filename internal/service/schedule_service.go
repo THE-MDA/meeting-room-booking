@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"meeting-room-booking/internal/domain"
 
 	"github.com/google/uuid"
@@ -11,12 +12,14 @@ import (
 type ScheduleService struct {
 	scheduleRepo domain.ScheduleRepository
 	roomRepo     domain.RoomRepository
+	slotRepo     domain.SlotRepository
 }
 
-func NewScheduleService(scheduleRepo domain.ScheduleRepository, roomRepo domain.RoomRepository) *ScheduleService {
+func NewScheduleService(scheduleRepo domain.ScheduleRepository, roomRepo domain.RoomRepository, slotRepo domain.SlotRepository) *ScheduleService {
 	return &ScheduleService{
 		scheduleRepo: scheduleRepo,
 		roomRepo:     roomRepo,
+		slotRepo:     slotRepo,
 	}
 }
 
@@ -43,9 +46,20 @@ func (s *ScheduleService) CreateSchedule(ctx context.Context, roomID uuid.UUID,
 	if err != nil {
 		return nil, err
 	}
-
 	if err := s.scheduleRepo.Create(ctx, schedule); err != nil {
 		return nil, err
+	}
+
+	// Получаем все расписания для комнаты
+	schedules, err := s.scheduleRepo.GetByRoomID(ctx, roomID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Генерируем слоты
+	if err := s.slotRepo.GenerateAndSaveSlotsForRoom(ctx, roomID, schedules, 90); err != nil {
+		// Логируем ошибку, но не отменяем создание расписания
+		slog.Error("Failed to generate slots", "error", err)
 	}
 
 	return schedule, nil

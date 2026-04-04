@@ -74,13 +74,14 @@ func main() {
 	roomRepo := repository.NewRoomRepository(dbWrapper)
 	scheduleRepo := repository.NewScheduleRepository(dbWrapper)
 	bookingRepo := repository.NewBookingRepository(dbWrapper)
+	slotRepo := repository.NewSlotRepository(dbWrapper)
 
 	slog.Info("Repositories initialized")
 
 	authService := service.NewAuthService(userRepo, cfg.JWTSecret, cfg.JWTExpiration)
 	roomService := service.NewRoomService(roomRepo)
-	scheduleService := service.NewScheduleService(scheduleRepo, roomRepo)
-	bookingService := service.NewBookingService(bookingRepo, roomRepo, scheduleRepo)
+	scheduleService := service.NewScheduleService(scheduleRepo, roomRepo, slotRepo)
+	bookingService := service.NewBookingService(bookingRepo, slotRepo, roomRepo, scheduleRepo)
 
 	slog.Info("Services initialized")
 
@@ -96,27 +97,22 @@ func main() {
 
 	mux.HandleFunc("POST /dummyLogin", authHandler.DummyLogin)
 
-	mux.HandleFunc("GET /rooms", authMiddleware.Authenticate(roomHandler.GetAllRooms))
-	mux.HandleFunc("POST /rooms", authMiddleware.Authenticate(authMiddleware.RequireAdmin(roomHandler.CreateRoom)))
+	mux.HandleFunc("GET /rooms/list", authMiddleware.Authenticate(roomHandler.GetAllRooms))
+	mux.HandleFunc("POST /rooms/create", authMiddleware.Authenticate(authMiddleware.RequireAdmin(roomHandler.CreateRoom)))
 
-	mux.HandleFunc("POST /schedules", authMiddleware.Authenticate(authMiddleware.RequireAdmin(scheduleHandler.CreateSchedule)))
+	mux.HandleFunc("POST /rooms/{roomId}/schedule/create", authMiddleware.Authenticate(authMiddleware.RequireAdmin(scheduleHandler.CreateSchedule)))
 
-	mux.HandleFunc("GET /slots", authMiddleware.Authenticate(bookingHandler.GetAvailableSlots))
-	mux.HandleFunc("POST /bookings", authMiddleware.Authenticate(bookingHandler.CreateBooking))
-	mux.HandleFunc("DELETE /bookings/{id}", authMiddleware.Authenticate(bookingHandler.CancelBooking))
+	mux.HandleFunc("GET /rooms/{roomId}/slots/list", authMiddleware.Authenticate(bookingHandler.GetAvailableSlots))
+
+	mux.HandleFunc("POST /bookings/create", authMiddleware.Authenticate(bookingHandler.CreateBooking))
+	mux.HandleFunc("GET /bookings/list", authMiddleware.Authenticate(authMiddleware.RequireAdmin(adminHandler.GetAllBookings)))
 	mux.HandleFunc("GET /bookings/my", authMiddleware.Authenticate(bookingHandler.GetMyBookings))
-
-	mux.HandleFunc("GET /admin/bookings", authMiddleware.Authenticate(authMiddleware.RequireAdmin(adminHandler.GetAllBookings)))
+	mux.HandleFunc("POST /bookings/{bookingId}/cancel", authMiddleware.Authenticate(bookingHandler.CancelBooking))
 
 	mux.HandleFunc("GET /_info", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
-
-		slog.Debug("Health check requested",
-			"remote_addr", r.RemoteAddr,
-			"user_agent", r.UserAgent(),
-		)
 	})
 
 	handler := loggingMiddleware(mux)
