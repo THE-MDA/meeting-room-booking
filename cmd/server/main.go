@@ -14,6 +14,8 @@ import (
 	_ "github.com/lib/pq"
 
 	"meeting-room-booking/internal/config"
+	httpHandler "meeting-room-booking/internal/handler/http"
+	"meeting-room-booking/internal/handler/http/middleware"
 	"meeting-room-booking/internal/logger"
 	"meeting-room-booking/internal/migrator"
 	"meeting-room-booking/internal/repository"
@@ -80,17 +82,33 @@ func main() {
 	scheduleService := service.NewScheduleService(scheduleRepo, roomRepo)
 	bookingService := service.NewBookingService(bookingRepo, roomRepo, scheduleRepo)
 
-	// TODO: remove 
-	_ = authService
-	_ = roomService
-	_ = scheduleService
-	_ = bookingService
-
 	slog.Info("Services initialized")
+
+	authHandler := httpHandler.NewAuthHandler(authService)
+	roomHandler := httpHandler.NewRoomHandler(roomService)
+	scheduleHandler := httpHandler.NewScheduleHandler(scheduleService)
+	bookingHandler := httpHandler.NewBookingHandler(bookingService)
+	adminHandler := httpHandler.NewAdminHandler(bookingService)
+
+	authMiddleware := middleware.NewAuthMiddleware(authService)
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/_info", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /dummyLogin", authHandler.DummyLogin)
+
+	mux.HandleFunc("GET /rooms", authMiddleware.Authenticate(roomHandler.GetAllRooms))
+	mux.HandleFunc("POST /rooms", authMiddleware.Authenticate(authMiddleware.RequireAdmin(roomHandler.CreateRoom)))
+
+	mux.HandleFunc("POST /schedules", authMiddleware.Authenticate(authMiddleware.RequireAdmin(scheduleHandler.CreateSchedule)))
+
+	mux.HandleFunc("GET /slots", authMiddleware.Authenticate(bookingHandler.GetAvailableSlots))
+	mux.HandleFunc("POST /bookings", authMiddleware.Authenticate(bookingHandler.CreateBooking))
+	mux.HandleFunc("DELETE /bookings/{id}", authMiddleware.Authenticate(bookingHandler.CancelBooking))
+	mux.HandleFunc("GET /bookings/my", authMiddleware.Authenticate(bookingHandler.GetMyBookings))
+
+	mux.HandleFunc("GET /admin/bookings", authMiddleware.Authenticate(authMiddleware.RequireAdmin(adminHandler.GetAllBookings)))
+
+	mux.HandleFunc("GET /_info", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))

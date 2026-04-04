@@ -100,7 +100,7 @@ func (s *BookingService) CreateBooking(ctx context.Context, userID uuid.UUID, sl
 	return booking, nil
 }
 
-func (s *BookingService) CanceledBooking(ctx context.Context, bookingID uuid.UUID) error {
+func (s *BookingService) CancelBooking(ctx context.Context, bookingID uuid.UUID) error {
 	return s.bookingRepo.Cancel(ctx, bookingID)
 }
 
