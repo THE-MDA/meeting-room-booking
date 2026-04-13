@@ -8,7 +8,6 @@ meeting-room-booking/
 ├── docker-compose.yml      # Docker Compose конфиг
 ├── Dockerfile              # Docker образ
 ├── go.mod                  # Go модуль
-├── Makefile                # (опционально)
 ├── README.md               # Этот файл
 ├── cmd/server/             # Точка входа
 ├── internal/               # Внутренний код
