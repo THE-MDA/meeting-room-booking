@@ -2,6 +2,7 @@
 Сервис бронирования переговорок с JWT авторизацией и ролевой моделью (admin/user).
 
 # Структура репозитория
+```
 meeting-room-booking/
 ├── api.yaml                # OpenAPI спецификация
 ├── docker-compose.yml      # Docker Compose конфиг
@@ -20,7 +21,7 @@ meeting-room-booking/
 │   └── service/            # Сервисы
 ├── migrations/             # SQL миграции
 └── tests/integration/      # E2E тесты
-
+```
 # Клонировать репозиторий
 git clone https://github.com/THE-MDA/meeting-room-booking.git
 cd meeting-room-booking
@@ -42,6 +43,7 @@ GET	/_info	Health check	Public
 Полная спецификация API в файле api.yaml.
 
 # Проект построен на принципах Clean Architecture:
+```
 cmd/server/          # Точка входа
 internal/
 ├── domain/          # Бизнес-сущности и правила
@@ -53,6 +55,7 @@ internal/
 └── migrator/        # Миграции
 migrations/          # SQL миграции
 tests/integration/   # E2E тесты
+```
 
 # PostgreSQL схема:
 users - пользователи (id, email, role, created_at)
