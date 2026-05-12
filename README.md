@@ -28,6 +28,7 @@ cd meeting-room-booking
 go run cmd/server/main.go
 
 # API Endpoints
+```
 Метод	Эндпоинт	Описание	Доступ
 POST	/dummyLogin	Получение JWT токена	Public
 GET	/rooms/list	Список переговорок	Admin, User
@@ -40,7 +41,7 @@ GET	/bookings/my	Мои брони	User
 POST	/bookings/{bookingId}/cancel	Отмена брони	User
 GET	/_info	Health check	Public
 Полная спецификация API в файле api.yaml.
-
+```
 # Проект построен на принципах Clean Architecture:
 ```
 cmd/server/          # Точка входа
@@ -57,12 +58,13 @@ tests/integration/   # E2E тесты
 ```
 
 # PostgreSQL схема:
+```
 users - пользователи (id, email, role, created_at)
 rooms - переговорки (id, name, description, capacity)
 schedules — расписания (id, room_id, day_of_week, start_time, end_time)
 slots — слоты (id, room_id, start_time, end_time)
 bookings — брони (id, slot_id, user_id, status)
-
+```
 # Использован подход: генерация и хранение слотов в БД при создании расписания.
 Почему выбран этот подход:
 Стабильные UUID слотов — требуется для бронирования по slotId
@@ -97,19 +99,21 @@ go test ./tests/integration/... -v
 E2E тест 1: создание переговорки -> создание расписания -> создание брони пользователем
 E2E тест 2: создание брони -> отмена брони
 
-# Решения по вопросам, не описанным в ТЗ
+# Описание решения
+```
 Генерация слотов -> При создании расписания на 90 дней вперёд -> Пользователи запрашивают слоты в пределах 7 дней; запас прочности
 Формат времени в расписании -> HH:MM:SS -> Удобно для хранения в БД типа TIME
 Пагинация -> page и pageSize (max 100) -> Согласно API спецификации
 Отмена брони -> POST /bookings/{id}/cancel -> Идемпотентная операция, возвращает 200
-
+```
 # Технологии
+```
 Go 1.21 — язык сервиса
 PostgreSQL 15 — база данных
 Docker Compose — оркестрация
 JWT — авторизация
 slog — структурированное логирование
 golang-migrate — миграции
-
+```
 # Автор
 Милчаков Дмитрий Александрович
